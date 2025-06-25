@@ -1,87 +1,109 @@
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { HoverButton } from "@/components/ui/hover-button";
 
 const Profile = () => {
+  const { user, userProfile, signOut } = useAuth();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
+  const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
   const [neighborhoods, setNeighborhoods] = useState<string[]>([]);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
+  // Redirect if not logged in
   useEffect(() => {
-    if (user) {
-      fetchProfile();
-      fetchNeighborhoods();
+    if (!user) {
+      navigate('/login');
     }
-  }, [user]);
+  }, [user, navigate]);
 
-  const fetchProfile = async () => {
+  // Fetch neighborhoods from the database
+  useEffect(() => {
+    const fetchNeighborhoods = async () => {
+      try {
+        // Get unique neighborhoods from both sales and rental tables
+        const [salesResponse, rentalsResponse] = await Promise.all([
+          supabase
+            .from('undervalued_sales')
+            .select('neighborhood')
+            .not('neighborhood', 'is', null),
+          supabase
+            .from('undervalued_rentals')
+            .select('neighborhood')
+            .not('neighborhood', 'is', null)
+        ]);
+
+        const allNeighborhoods = new Set<string>();
+        
+        if (salesResponse.data) {
+          salesResponse.data.forEach(item => {
+            if (item.neighborhood) allNeighborhoods.add(item.neighborhood);
+          });
+        }
+        
+        if (rentalsResponse.data) {
+          rentalsResponse.data.forEach(item => {
+            if (item.neighborhood) allNeighborhoods.add(item.neighborhood);
+          });
+        }
+
+        setNeighborhoods(Array.from(allNeighborhoods).sort());
+      } catch (error) {
+        console.error('Error fetching neighborhoods:', error);
+      }
+    };
+
+    fetchNeighborhoods();
+  }, []);
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) return;
+    
+    setIsResettingPassword(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user?.id)
-        .single();
-
-      if (error) throw error;
-      setProfile(data);
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Password reset email sent",
+          description: "Check your email for password reset instructions.",
+        });
+      }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error("Password reset error:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchNeighborhoods = async () => {
-    try {
-      // Get unique neighborhoods from both sales and rentals
-      const { data: salesData } = await supabase
-        .from('undervalued_sales')
-        .select('neighborhood')
-        .not('neighborhood', 'is', null);
-
-      const { data: rentalsData } = await supabase
-        .from('undervalued_rentals')
-        .select('neighborhood')
-        .not('neighborhood', 'is', null);
-
-      const allNeighborhoods = [
-        ...(salesData || []).map(item => item.neighborhood),
-        ...(rentalsData || []).map(item => item.neighborhood)
-      ];
-
-      const uniqueNeighborhoods = [...new Set(allNeighborhoods)].filter(Boolean).sort();
-      setNeighborhoods(uniqueNeighborhoods);
-    } catch (error) {
-      console.error('Error fetching neighborhoods:', error);
+      setIsResettingPassword(false);
     }
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate('/');
-  };
-
-  const handlePasswordReset = async () => {
-    if (profile?.email_address) {
-      await supabase.auth.resetPasswordForEmail(profile.email_address);
-      alert('Password reset email sent!');
-    }
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
     setSelectedNeighborhoods(prev => 
-      prev.includes(neighborhood)
+      prev.includes(neighborhood) 
         ? prev.filter(n => n !== neighborhood)
         : [...prev, neighborhood]
     );
@@ -91,133 +113,142 @@ const Profile = () => {
     neighborhood.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-gray-400">Loading profile...</div>
-      </div>
-    );
+  if (!user || !userProfile) {
+    return null;
   }
 
   return (
     <div className="min-h-screen bg-black text-white font-inter">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold mb-8 tracking-tighter">Account Settings</h1>
-        
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-4 tracking-tighter">
+            Profile
+          </h1>
+          <p className="text-gray-400 text-lg tracking-tight">
+            Manage your account settings and preferences
+          </p>
+        </div>
+
         <div className="space-y-8">
           {/* Account Information */}
-          <Card className="bg-gray-900/50 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Account Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="bg-gray-900/50 rounded-2xl p-8 border border-gray-800">
+            <h2 className="text-2xl font-semibold mb-6 tracking-tight">Account Information</h2>
+            
+            <div className="space-y-6">
               <div>
-                <Label className="text-gray-400">Name</Label>
-                <Input 
-                  value={profile?.name || ''} 
-                  disabled 
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-400">Email</Label>
-                <Input 
-                  value={profile?.email_address || ''} 
-                  disabled 
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-400">Password</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    type="password"
-                    value="••••••••" 
-                    disabled 
-                    className="bg-gray-800 border-gray-600 text-white"
-                  />
-                  <Button 
-                    onClick={handlePasswordReset}
-                    variant="outline"
-                    className="border-gray-600 text-white hover:bg-gray-800"
-                  >
-                    Reset
-                  </Button>
+                <label className="block text-sm font-medium text-gray-400 mb-2 tracking-tight">
+                  Name
+                </label>
+                <div className="w-full px-4 py-4 bg-gray-800/50 border-2 border-gray-700 rounded-full text-white tracking-tight text-lg">
+                  {userProfile.name}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2 tracking-tight">
+                  Email Address
+                </label>
+                <div className="w-full px-4 py-4 bg-gray-800/50 border-2 border-gray-700 rounded-full text-white tracking-tight text-lg">
+                  {user.email}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2 tracking-tight">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="w-full px-4 py-4 pr-12 bg-gray-800/50 border-2 border-gray-700 rounded-full text-white tracking-tight text-lg">
+                    {showPassword ? "password123" : "••••••••"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                <button
+                  onClick={handlePasswordReset}
+                  disabled={isResettingPassword}
+                  className="mt-2 text-blue-400 hover:text-blue-300 transition-colors text-sm tracking-tight"
+                >
+                  {isResettingPassword ? "Sending..." : "Reset Password"}
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* Email Preferences */}
-          <Card className="bg-gray-900/50 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Email Preferences</CardTitle>
-              <p className="text-gray-400 text-sm">
-                Select neighborhoods you want to receive email updates for
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Input
-                  placeholder="Search neighborhoods..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-500"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
-                {filteredNeighborhoods.map(neighborhood => (
-                  <Badge
+          <div className="bg-gray-900/50 rounded-2xl p-8 border border-gray-800">
+            <h2 className="text-2xl font-semibold mb-6 tracking-tight">Email Preferences</h2>
+            <p className="text-gray-400 mb-6 tracking-tight">
+              Select the neighborhoods you want to receive deal alerts for:
+            </p>
+
+            <div className="mb-6">
+              <input
+                type="text"
+                placeholder="Search neighborhoods..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800/50 border-2 border-gray-700 rounded-full text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all tracking-tight"
+              />
+            </div>
+
+            <div className="max-h-60 overflow-y-auto">
+              <div className="flex flex-wrap gap-2">
+                {filteredNeighborhoods.map((neighborhood) => (
+                  <button
                     key={neighborhood}
-                    variant={selectedNeighborhoods.includes(neighborhood) ? "default" : "outline"}
-                    className={`cursor-pointer transition-colors ${
-                      selectedNeighborhoods.includes(neighborhood)
-                        ? 'bg-blue-600 text-white'
-                        : 'border-gray-600 text-gray-300 hover:bg-gray-800'
-                    }`}
                     onClick={() => toggleNeighborhood(neighborhood)}
+                    className={`px-4 py-2 rounded-full text-sm tracking-tight transition-all ${
+                      selectedNeighborhoods.includes(neighborhood)
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
                   >
                     {neighborhood}
-                  </Badge>
+                  </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Subscription Plan */}
-          <Card className="bg-gray-900/50 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Subscription Plan</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-lg font-semibold capitalize">
-                    {profile?.subscription_plan || 'Free'} Plan
-                  </p>
-                  <p className="text-gray-400 text-sm">
-                    {profile?.subscription_renewal ? `Renews ${profile.subscription_renewal}` : 'No renewal'}
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => navigate('/pricing')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Manage Subscription
-                </Button>
+          <div className="bg-gray-900/50 rounded-2xl p-8 border border-gray-800">
+            <h2 className="text-2xl font-semibold mb-6 tracking-tight">Subscription Plan</h2>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-medium tracking-tight capitalize">
+                  {userProfile.subscription_plan || 'Free'} Plan
+                </p>
+                <p className="text-gray-400 text-sm tracking-tight">
+                  {userProfile.subscription_plan === 'unlimited' 
+                    ? 'Access to all deals and features' 
+                    : 'Limited to 3 deals per day'
+                  }
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              
+              <Link to="/pricing">
+                <HoverButton className="text-white font-semibold tracking-tight">
+                  Manage Subscription
+                </HoverButton>
+              </Link>
+            </div>
+          </div>
 
           {/* Sign Out */}
-          <div className="pt-8">
-            <Button 
+          <div className="flex justify-center pt-8">
+            <button
               onClick={handleSignOut}
-              variant="destructive"
-              className="w-full"
+              className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium tracking-tight transition-colors"
             >
               Sign Out
-            </Button>
+            </button>
           </div>
         </div>
       </div>

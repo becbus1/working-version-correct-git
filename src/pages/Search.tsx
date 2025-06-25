@@ -1,16 +1,7 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search as SearchIcon } from "lucide-react";
 import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
-import PropertyCard from "@/components/PropertyCard";
-import PropertyDetail from "@/components/PropertyDetail";
-
-// Use the auto-generated Supabase types directly
-type SupabaseUndervaluedSales = Tables<'undervalued_sales'>;
-type SupabaseUndervaluedRentals = Tables<'undervalued_rentals'>;
 
 const Search = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -18,121 +9,32 @@ const Search = () => {
   const [maxPrice, setMaxPrice] = useState("");
   const [bedrooms, setBedrooms] = useState("");
   const [isRent, setIsRent] = useState(false);
-  const [properties, setProperties] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
 
-  const ITEMS_PER_PAGE = 50;
-
-  useEffect(() => {
-    fetchProperties(true);
-  }, [isRent]);
-
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchProperties(true);
-    }, 500);
-
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, zipCode, maxPrice, bedrooms]);
-
-  const fetchProperties = async (reset = false) => {
-    setLoading(true);
-    const currentOffset = reset ? 0 : offset;
-
-    try {
-      // Build a much simpler, more direct query
-      let query;
-      
-      if (isRent) {
-        query = supabase
-          .from('undervalued_rentals')
-          .select('*') // Select ALL columns first, no filtering
-          .eq('status', 'active')
-          .order('score', { ascending: false });
-      } else {
-        query = supabase
-          .from('undervalued_sales')
-          .select('*') // Select ALL columns first, no filtering
-          .eq('status', 'active')
-          .order('score', { ascending: false });
-      }
-
-      // Apply simple filters one by one, NOT with complex OR logic
-      if (searchTerm.trim()) {
-        // Use simple ilike on address only for now
-        query = query.ilike('address', `%${searchTerm.trim()}%`);
-      }
-
-      if (zipCode.trim()) {
-        query = query.ilike('zipcode', `${zipCode.trim()}%`);
-      }
-
-      if (maxPrice.trim()) {
-        const priceValue = parseInt(maxPrice.trim());
-        if (!isNaN(priceValue) && priceValue > 0) {
-          if (isRent) {
-            query = query.lte('monthly_rent', priceValue);
-          } else {
-            query = query.lte('price', priceValue);
-          }
-        }
-      }
-
-      if (bedrooms.trim()) {
-        const bedroomValue = parseInt(bedrooms.trim());
-        if (!isNaN(bedroomValue) && bedroomValue >= 0) {
-          query = query.gte('bedrooms', bedroomValue);
-        }
-      }
-
-      // Apply pagination last
-      const { data, error } = await query.range(currentOffset, currentOffset + ITEMS_PER_PAGE - 1);
-
-      if (error) {
-        console.error('❌ SUPABASE ERROR:', error);
-        setProperties([]);
-        return;
-      }
-
-      if (!data || !Array.isArray(data)) {
-        console.error('❌ DATA IS NOT AN ARRAY OR IS NULL:', data);
-        setProperties([]);
-        return;
-      }
-
-      // CRITICAL: Log the raw data to see if we're getting variety
-      console.log('🔥 RAW SUPABASE DATA (first 5):', data.slice(0, 5).map(item => ({
-        address: item.address,
-        grade: item.grade,
-        score: item.score,
-        id: item.id
-      })));
-
-      if (reset) {
-        setProperties(data);
-        setOffset(ITEMS_PER_PAGE);
-      } else {
-        setProperties(prev => [...prev, ...data]);
-        setOffset(prev => prev + ITEMS_PER_PAGE);
-      }
-
-      setHasMore(data.length === ITEMS_PER_PAGE);
-    } catch (error) {
-      console.error('💥 CATCH ERROR:', error);
-      setProperties([]);
-    } finally {
-      setLoading(false);
+  // Placeholder data
+  const mockListings = [
+    {
+      id: 1,
+      address: "123 Rivington St, Lower East Side",
+      price: "$850,000",
+      pricePerSqft: "$1,200",
+      bedrooms: 2,
+      bathrooms: 1,
+      sqft: 708,
+      dealScore: 95,
+      image: "/lovable-uploads/e5660153-0793-48a7-b1cd-4dd731b37c1e.png"
+    },
+    {
+      id: 2,
+      address: "456 Graham Ave, Williamsburg",
+      price: "$720,000",
+      pricePerSqft: "$980",
+      bedrooms: 1,
+      bathrooms: 1,
+      sqft: 735,
+      dealScore: 88,
+      image: "/lovable-uploads/e5660153-0793-48a7-b1cd-4dd731b37c1e.png"
     }
-  };
-
-  const loadMore = () => {
-    if (!loading && hasMore) {
-      fetchProperties(false);
-    }
-  };
+  ];
 
   return (
     <div className="min-h-screen bg-black text-white font-inter">
@@ -197,13 +99,13 @@ const Search = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2 tracking-tight">
-                Max {isRent ? '/month' : 'Price'}
+                Max {isRent ? '/month' : '$/sqft'}
               </label>
               <input
                 type="text"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder={isRent ? "$4,000" : "$1,500,000"}
+                placeholder={isRent ? "$4,000" : "$1,500"}
                 className="w-full px-4 py-3 bg-black/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all tracking-tight"
               />
             </div>
@@ -217,75 +119,80 @@ const Search = () => {
                 className="w-full px-4 py-3 bg-black/50 border border-gray-700 rounded-xl text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all tracking-tight"
               >
                 <option value="">Any</option>
-                <option value="0">Studio</option>
                 <option value="1">1+</option>
                 <option value="2">2+</option>
                 <option value="3">3+</option>
-                <option value="4">4+</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Results Count */}
+        {/* Sort Options */}
         <div className="flex justify-between items-center mb-8">
-          <div className="text-sm text-gray-500">
-            Showing {properties.length} {isRent ? 'rental' : 'sale'} properties
-          </div>
+          <p className="text-gray-400 tracking-tight">
+            {mockListings.length} undervalued listings found
+          </p>
+          <select className="bg-black/50 border border-gray-700 rounded-xl px-4 py-2 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all tracking-tight">
+            <option>Best Deal Score</option>
+            <option>Lowest $/sqft</option>
+            <option>Newest</option>
+          </select>
         </div>
 
-        {/* Properties Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {properties.map((property, index) => (
-            <PropertyCard
-              key={`${property.id}-${index}`}
-              property={property}
-              isRental={isRent}
-              onClick={() => setSelectedProperty(property)}
-            />
+        {/* Listings Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {mockListings.map((listing) => (
+            <div 
+              key={listing.id}
+              className="relative rounded-3xl overflow-hidden border-2 border-gray-700/50 hover:border-blue-500/70 transition-all duration-300 hover:scale-105 cursor-pointer group bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-sm"
+            >
+              {/* Score badge - top right */}
+              <div className="absolute top-4 right-4 z-10 bg-blue-500/90 backdrop-blur-sm text-white px-3 py-2 rounded-full text-lg font-bold tracking-tight shadow-lg">
+                {listing.dealScore}
+              </div>
+              
+              {/* Image container */}
+              <div 
+                className="h-56 bg-cover bg-center relative"
+                style={{ backgroundImage: `url('${listing.image}')` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              </div>
+              
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <h3 className="text-lg font-semibold tracking-tight text-white group-hover:text-blue-300 transition-colors">
+                  {listing.address}
+                </h3>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-2xl font-bold text-green-400 tracking-tight">
+                    {listing.price}
+                  </span>
+                  <span className="text-gray-300 tracking-tight font-medium">
+                    {listing.pricePerSqft}/sqft
+                  </span>
+                </div>
+                
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span className="tracking-tight">{listing.bedrooms} bed, {listing.bathrooms} bath</span>
+                  <span className="tracking-tight">{listing.sqft} sqft</span>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
 
-        {/* Loading state */}
-        {loading && (
-          <div className="text-center py-8">
-            <div className="text-gray-400">Loading properties...</div>
-          </div>
-        )}
-
-        {/* Load More Button */}
-        {!loading && hasMore && properties.length > 0 && (
-          <div className="text-center py-8">
-            <Button
-              onClick={loadMore}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-semibold"
-            >
-              Load More Properties
-            </Button>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && properties.length === 0 && (
-          <div className="text-center py-16">
-            <h3 className="text-xl text-gray-400 mb-4 tracking-tight">
-              No properties found matching your criteria
-            </h3>
-            <p className="text-gray-500 tracking-tight">
-              Try adjusting your search filters to see more results.
-            </p>
-          </div>
-        )}
+        {/* Empty State for more listings */}
+        <div className="text-center py-16">
+          <h3 className="text-xl text-gray-400 mb-4 tracking-tight">
+            We're still scraping the good stuff...
+          </h3>
+          <p className="text-gray-500 tracking-tight">
+            More undervalued deals coming soon.
+          </p>
+        </div>
       </div>
-
-      {/* Property Detail Modal */}
-      {selectedProperty && (
-        <PropertyDetail
-          property={selectedProperty}
-          isRental={isRent}
-          onClose={() => setSelectedProperty(null)}
-        />
-      )}
     </div>
   );
 };

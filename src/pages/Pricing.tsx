@@ -1,16 +1,10 @@
 
 import { Link } from "react-router-dom";
 import { HoverButton } from "@/components/ui/hover-button";
-import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
-import { useState } from "react";
 
 const Pricing = () => {
-  const [isAnnual, setIsAnnual] = useState(false);
-
   return (
     <div className="font-inter min-h-screen bg-black text-white">
-      <GooeyFilter />
-      
       {/* Pricing Section */}
       <section className="py-20 px-4 bg-gray-900/30">
         <div className="max-w-6xl mx-auto">
@@ -21,21 +15,6 @@ const Pricing = () => {
             <p className="text-xl text-gray-400 tracking-tight">
               The best deals disappear in days. Get notified first.
             </p>
-            
-            {/* Billing Toggle */}
-            <div className="flex items-center justify-center gap-4 mt-8">
-              <span className={`text-lg ${!isAnnual ? 'text-white' : 'text-gray-400'}`}>
-                Monthly
-              </span>
-              <Toggle
-                checked={isAnnual}
-                onCheckedChange={setIsAnnual}
-                variant="default"
-              />
-              <span className={`text-lg ${isAnnual ? 'text-white' : 'text-gray-400'}`}>
-                Annual
-              </span>
-            </div>
           </div>
           
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -76,13 +55,7 @@ const Pricing = () => {
                   <div className="mb-4">
                     <h3 className="text-2xl font-semibold tracking-tight">Unlimited</h3>
                   </div>
-                  <p className="text-4xl font-semibold mb-6 tracking-tight">
-                    {isAnnual ? (
-                      <>$19<span className="text-lg text-gray-400">/yr</span></>
-                    ) : (
-                      <>$3<span className="text-lg text-gray-400">/mo</span></>
-                    )}
-                  </p>
+                  <p className="text-4xl font-semibold mb-6 tracking-tight">$3<span className="text-lg text-gray-400">/mo</span></p>
                   <ul className="space-y-3 mb-12 text-gray-300 flex-grow">
                     <li className="flex items-center tracking-tight">
                       <span className="text-blue-400 mr-3">•</span>
@@ -102,7 +75,7 @@ const Pricing = () => {
                     </li>
                   </ul>
                   <button className="w-full bg-white text-black py-3 rounded-full font-medium tracking-tight transition-all mt-8 hover:bg-gray-200">
-                    {isAnnual ? "Try 3 days free" : "Access Everything"}
+                    Access Everything
                   </button>
                 </div>
               </div>
